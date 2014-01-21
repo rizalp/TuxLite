@@ -1,8 +1,6 @@
 ###############################################################################################
-# TuxLite - Complete LNMP/LAMP setup script for Debian/Ubuntu                                 #
-# Nginx/Apache + PHP5-FPM + MySQL                                                             #
-# Stack is optimized/tuned for a 256MB server                                                 #
-# Email your questions to s@tuxlite.com                                                       #
+# nonjix - Complete Nodejs + Nginx setup script for Debian/Ubuntu                             #
+# Email your questions to rizalp@gmail.com                                                    #
 ###############################################################################################
 
 source ./options.conf
@@ -18,7 +16,6 @@ fi
 
 
 #### Functions Begin ####
-
 function basic_server_setup {
 
     aptitude update && aptitude -y safe-upgrade
@@ -102,7 +99,7 @@ EOF
 
     ## Third party mirrors ##
 
-    # Need to add Dotdeb repo for installing PHP5-FPM when using Debian 6.0 (squeeze)
+    # Add Dotdeb repo when using Debian 6.0 (squeeze)
     if  [ $DISTRO = "Debian" ] && [ $RELEASE = "squeeze" ]; then
         echo -e "\033[35;1mEnabling DotDeb repo for Debian 6.0 Squeeze. \033[0m"
         cat > /etc/apt/sources.list.d/dotdeb.list <<EOF
@@ -128,7 +125,7 @@ EOF
 
         # Set APT pinning for Nginx package
         cat > /etc/apt/preferences.d/Nginx <<EOF
-# Prevent potential conflict with main repo/dotdeb 
+# Prevent potential conflict with main repo/dotdeb
 # Always install from official nginx.org repo
 Package: nginx
 Pin: origin nginx.org
@@ -172,7 +169,6 @@ EOF
 
 function install_webserver {
 
-    # From options.conf, nginx = 1, apache = 2
     if [ $WEBSERVER = 1 ]; then
         aptitude -y install nginx
 
@@ -192,33 +188,10 @@ function install_webserver {
 
         # Change default vhost root directory to /usr/share/nginx/html;
         sed -i 's/\(root \/usr\/share\/nginx\/\).*/\1html;/' /etc/nginx/sites-available/default
-    else
-        aptitude -y install libapache2-mod-fastcgi apache2-mpm-event
 
-        a2dismod php4
-        a2dismod php5
-        a2dismod fcgid
-        a2enmod actions
-        a2enmod fastcgi
-        a2enmod ssl
-        a2enmod rewrite
-
-        cat ./config/fastcgi.conf > /etc/apache2/mods-available/fastcgi.conf
-
-        # Create the virtual directory for the external server
-        mkdir -p /srv/www/fcgi-bin.d
     fi
 
 } # End function install_webserver
-
-
-function install_php {
-
-    # Install PHP packages and extensions specified in options.conf
-    aptitude -y install $PHP_BASE
-    aptitude -y install $PHP_EXTRAS
-
-} # End function install_php
 
 
 function install_extras {
@@ -275,12 +248,10 @@ function install_mysql {
 
 function optimize_stack {
 
-    # If using Nginx, copy over nginx.conf
     if [ $WEBSERVER = 1 ]; then
         cat ./config/nginx.conf > /etc/nginx/nginx.conf
 
-        # Change nginx user from  "www-data" to "nginx". Not really necessary
-        # because "www-data" user is created when installing PHP5-FPM
+        # Change nginx user from  "www-data" to "nginx".
         if  [ $USE_NGINX_ORG_REPO = "yes" ]; then
             sed -i 's/^user\s*www-data/user nginx/' /etc/nginx/nginx.conf
         fi
@@ -288,21 +259,6 @@ function optimize_stack {
         # Change logrotate for nginx log files to keep 10 days worth of logs
         nginx_file=`find /etc/logrotate.d/ -maxdepth 1 -name "nginx*"`
         sed -i 's/\trotate .*/\trotate 10/' $nginx_file
-
-    # If using Apache, copy over apache2.conf
-    else
-        cat ./config/apache2.conf > /etc/apache2/apache2.conf
-
-        # Change logrotate for Apache2 log files to keep 10 days worth of logs
-        sed -i 's/\tweekly/\tdaily/' /etc/logrotate.d/apache2
-        sed -i 's/\trotate .*/\trotate 10/' /etc/logrotate.d/apache2
-
-        # Remove Apache server information from headers.
-        sed -i 's/ServerTokens .*/ServerTokens Prod/' /etc/apache2/conf.d/security
-        sed -i 's/ServerSignature .*/ServerSignature Off/' /etc/apache2/conf.d/security
-
-        # Add *:443 to ports.conf
-        cat ./config/apache2_ports.conf > /etc/apache2/ports.conf
     fi
 
     if [ $AWSTATS_ENABLE = 'yes' ]; then
@@ -315,28 +271,7 @@ function optimize_stack {
         sed -i 's/^[^#]/#&/' /etc/cron.d/awstats
     fi
 
-    service php5-fpm stop
-    php_fpm_conf="/etc/php5/fpm/pool.d/www.conf"
-    # Limit FPM processes
-    sed -i 's/^pm.max_children.*/pm.max_children = '${FPM_MAX_CHILDREN}'/' $php_fpm_conf
-    sed -i 's/^pm.start_servers.*/pm.start_servers = '${FPM_START_SERVERS}'/' $php_fpm_conf
-    sed -i 's/^pm.min_spare_servers.*/pm.min_spare_servers = '${FPM_MIN_SPARE_SERVERS}'/' $php_fpm_conf
-    sed -i 's/^pm.max_spare_servers.*/pm.max_spare_servers = '${FPM_MAX_SPARE_SERVERS}'/' $php_fpm_conf
-    sed -i 's/\;pm.max_requests.*/pm.max_requests = '${FPM_MAX_REQUESTS}'/' $php_fpm_conf
-    # Change to socket connection for better performance
-    sed -i 's/^listen =.*/listen = \/var\/run\/php5-fpm-www-data.sock/' $php_fpm_conf
-
-    php_ini_dir="/etc/php5/fpm/php.ini"
-    # Tweak php.ini based on input in options.conf
-    sed -i 's/^max_execution_time.*/max_execution_time = '${PHP_MAX_EXECUTION_TIME}'/' $php_ini_dir
-    sed -i 's/^memory_limit.*/memory_limit = '${PHP_MEMORY_LIMIT}'/' $php_ini_dir
-    sed -i 's/^max_input_time.*/max_input_time = '${PHP_MAX_INPUT_TIME}'/' $php_ini_dir
-    sed -i 's/^post_max_size.*/post_max_size = '${PHP_POST_MAX_SIZE}'/' $php_ini_dir
-    sed -i 's/^upload_max_filesize.*/upload_max_filesize = '${PHP_UPLOAD_MAX_FILESIZE}'/' $php_ini_dir
-    sed -i 's/^expose_php.*/expose_php = Off/' $php_ini_dir
-    sed -i 's/^disable_functions.*/disable_functions = exec,system,passthru,shell_exec,escapeshellarg,escapeshellcmd,proc_close,proc_open,dl,popen,show_source/' $php_ini_dir
-
-    # Generating self signed SSL certs for securing phpMyAdmin, script logins etc
+    # Generating self signed SSL certs
     echo -e " "
     echo -e "\033[35;1m Generating self signed SSL cert... \033[0m"
     mkdir /etc/ssl/localcerts
@@ -366,24 +301,32 @@ function optimize_stack {
     echo "$GENERATE_CERT"
     aptitude -y purge expect
 
-    # Tweak my.cnf. Commented out. Best to let users configure my.cnf on their own
-    #cp /etc/mysql/{my.cnf,my.cnf.bak}
-    #if [ -e /usr/share/doc/mysql-server-5.1/examples/my-medium.cnf.gz ]; then
-    #gunzip /usr/share/doc/mysql-server-5.1/examples/my-medium.cnf.gz
-    #cp /usr/share/doc/mysql-server-5.1/examples/my-medium.cnf /etc/mysql/my.cnf
-    #else
-    #gunzip /usr/share/doc/mysql-server-5.0/examples/my-medium.cnf.gz
-    #cp /usr/share/doc/mysql-server-5.0/examples/my-medium.cnf /etc/mysql/my.cnf
-    #fi
-    #sed -i '/myisam_sort_buffer_size/ a\skip-innodb' /etc/mysql/my.cnf
-    #sleep 1
-    #service mysql restart
+#Email Anytime a user uses sudo
+cat >> /etc/sudoers.d/my_sudoers <<EOF
+Defaults    mail_always
+Defaults    mailto="${mailto_sudo}"
+EOF
+chmod 0440 /etc/sudoers.d/my_sudoers
+
+# IPTables
+cat ./config/iptables.conf >> /etc/iptables.firewall.rules
+iptables-restore < /etc/iptables.firewall.rules
+cat >> /etc/network/if-pre-up.d/firewall <<EOF
+#!/bin/sh
+/sbin/iptables-restore < /etc/iptables.firewall.rules
+EOF
+chmod +x /etc/network/if-pre-up.d/firewall
+
+#Keep MySQL tables in tip-top shape
+crontab -l > tempCron
+cat >> tempCron <<EOF
+@weekly mysqlcheck -o --user=root --password=$MYSQL_ROOT_PASSWORD -A
+EOF
+crontab tempCron
+rm tempCron
 
     restart_webserver
     sleep 2
-    service php5-fpm start
-    sleep 2
-    service php5-fpm restart
     echo -e "\033[35;1m Optimize complete! \033[0m"
 
 } # End function optimize
@@ -408,150 +351,14 @@ function install_postfix {
 } # End function install_postfix
 
 
-
-function install_dbgui {
-
-    # If user selected phpMyAdmin in options.conf
-    if [ $DB_GUI = 1  ]; then
-        mkdir /tmp/phpmyadmin
-        wget -O - $PMA_LINK | tar zxf - -C /tmp/phpmyadmin
-
-        # Check exit status to see if download is successful
-        if [ $? = 0  ]; then
-            mkdir /usr/local/share/phpmyadmin
-            rm -rf /usr/local/share/phpmyadmin/*
-            cp -Rpf /tmp/phpmyadmin/*/* /usr/local/share/phpmyadmin
-            cp /usr/local/share/phpmyadmin/{config.sample.inc.php,config.inc.php}
-            rm -rf /tmp/phpmyadmin
-
-            # Generate random blowfish string
-            LENGTH="20"
-            MATRIX="0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
-            while [ "${n:=1}" -le "$LENGTH" ]; do
-                BLOWFISH="$BLOWFISH${MATRIX:$(($RANDOM%${#MATRIX})):1}"
-                let n+=1
-            done
-
-            # Configure phpmyadmin blowfish variable
-            sed -i "s/blowfish_secret'] = ''/blowfish_secret'] = \'$BLOWFISH\'/"  /usr/local/share/phpmyadmin/config.inc.php
-            echo -e "\033[35;1mphpMyAdmin installed/upgraded.\033[0m"
-        else
-            echo -e "\033[35;1mInstall/upgrade failed. Perhaps phpMyAdmin download link is temporarily down. Update link in options.conf and try again.\033[0m"
-        fi
-
-    else # User selected Adminer
-
-        mkdir -p /usr/local/share/adminer
-        cd /usr/local/share/adminer
-        rm -rf /usr/local/share/adminer/*
-        wget http://www.adminer.org/latest.php
-        if [ $? = 0  ]; then
-            mv latest.php index.php
-            echo -e "\033[35;1m Adminer installed. \033[0m"
-        else
-            echo -e "\033[35;1mInstall/upgrade failed. Perhaps http://adminer.org is down. Try again later.\033[0m"
-        fi
-        cd - &> /dev/null
-    fi # End if DB_GUI
-
-} # End function install_dbgui
-
-
-function check_tmp_secured {
-
-    temp1=`grep -w "/var/tempFS /tmp ext3 loop,nosuid,noexec,rw 0 0" /etc/fstab | wc -l`
-    temp2=`grep -w "tmpfs /tmp tmpfs rw,noexec,nosuid 0 0" /etc/fstab | wc -l`
-
-    if [ $temp1  -gt 0 ] || [ $temp2 -gt 0 ]; then
-        return 1
-    else
-        return 0
-    fi
-
-} # End function check_tmp_secured
-
-
-function secure_tmp_tmpfs {
-
-    cp /etc/fstab /etc/fstab.bak
-    # Backup /tmp
-    cp -Rpf /tmp /tmpbackup
-
-    rm -rf /tmp
-    mkdir /tmp
-
-    mount -t tmpfs -o rw,noexec,nosuid tmpfs /tmp
-    chmod 1777 /tmp
-    echo "tmpfs /tmp tmpfs rw,noexec,nosuid 0 0" >> /etc/fstab
-
-    # Restore /tmp
-    cp -Rpf /tmpbackup/* /tmp/ >/dev/null 2>&1
-
-    #Remove old tmp dir
-    rm -rf /tmpbackup
-
-    # Backup /var/tmp and link it to /tmp
-    mv /var/tmp /var/tmpbackup
-    ln -s /tmp /var/tmp
-
-    # Copy the old data back
-    cp -Rpf /var/tmpold/* /tmp/ >/dev/null 2>&1
-    # Remove old tmp dir
-    rm -rf /var/tmpbackup
-
-    echo -e "\033[35;1m /tmp and /var/tmp secured using tmpfs. \033[0m"
-
-} # End function secure_tmp_tmpfs
-
-
-function secure_tmp_dd {
-
-    cp /etc/fstab /etc/fstab.bak
-
-    # Create 1GB space for /tmp, change count if you want smaller/larger size
-    dd if=/dev/zero of=/var/tempFS bs=1024 count=$TMP_SIZE
-    # Make space as a ext3 filesystem
-    /sbin/mkfs.ext3 /var/tempFS
-
-    # Backup /tmp
-    cp -Rpf /tmp /tmpbackup
-
-    # Secure /tmp
-    mount -o loop,noexec,nosuid,rw /var/tempFS /tmp
-    chmod 1777 /tmp
-    echo "/var/tempFS /tmp ext3 loop,nosuid,noexec,rw 0 0" >> /etc/fstab
-
-    # Restore /tmp
-    cp -Rpf /tmpbackup/* /tmp/ >/dev/null 2>&1
-
-    # Remove old tmp dir
-    rm -rf /tmpbackup
-
-    # Backup /var/tmp and link it to /tmp
-    mv /var/tmp /var/tmpbackup
-    ln -s /tmp /var/tmp
-
-    # Copy the old data back
-    cp -Rpf /var/tmpold/* /tmp/ >/dev/null 2>&1
-    # Remove old tmp dir
-    rm -rf /var/tmpbackup
-
-    echo -e "\033[35;1m /tmp and /var/tmp secured using file created using dd. \033[0m"
-
-} # End function secure_tmp_tmpdd
-
-
 function restart_webserver {
 
-    # From options.conf, nginx = 1, apache = 2
     if [ $WEBSERVER = 1 ]; then
         service nginx restart
-    else
-        apache2ctl graceful
+
     fi
 
 } # End function restart_webserver
-
 
 
 #### Main program begins ####
@@ -580,18 +387,6 @@ if [ ! -n "$1" ]; then
     echo -ne "\033[36m optimize\033[0m"
     echo     " - Optimizes webserver.conf, php.ini, AWStats & logrotate. Also generates self signed SSL certs."
 
-    echo -n "$0"
-    echo -ne "\033[36m dbgui\033[0m"
-    echo     " - Installs or updates Adminer/phpMyAdmin."
-
-    echo -n "$0"
-    echo -ne "\033[36m tmpfs\033[0m"
-    echo     " - Secures /tmp and /var/tmp using tmpfs. Not recommended for servers with less than 512MB dedicated RAM."
-
-    echo -n "$0"
-    echo -ne "\033[36m tmpdd\033[0m"
-    echo     " - Secures /tmp and /var/tmp using a file created on disk. Tmp size is defined in options.conf."
-
     echo ""
     exit
 fi
@@ -608,34 +403,12 @@ basic)
 install)
     install_webserver
     install_mysql
-    install_php
     install_extras
     install_postfix
     restart_webserver
-    service php5-fpm restart
-    echo -e "\033[35;1m Webserver + PHP-FPM + MySQL install complete! \033[0m"
     ;;
 optimize)
     optimize_stack
-    ;;
-dbgui)
-    install_dbgui
-    ;;
-tmpdd)
-    check_tmp_secured
-    if [ $? = 0  ]; then
-        secure_tmp_dd
-    else
-        echo -e "\033[35;1mFunction canceled. /tmp already secured. \033[0m"
-    fi
-    ;;
-tmpfs)
-    check_tmp_secured
-    if [ $? = 0  ]; then
-        secure_tmp_tmpfs
-    else
-        echo -e "\033[35;1mFunction canceled. /tmp already secured. \033[0m"
-    fi
     ;;
 esac
 

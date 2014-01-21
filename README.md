@@ -1,14 +1,14 @@
-### TuxLite Readme
+### nonjix Readme
 
-TuxLite is a free collection of shell scripts for rapid deployment of
+nonjix is a free collection of shell scripts for rapid deployment of
 LAMP and LNMP stacks (Linux, Apache/Nginx, MySQL and PHP) for Debian and
-Ubuntu. 
+Ubuntu.
 
 Have you considered upgrading from shared hosting to a VPS or dedicated
 server but held off by the costly control panel licenses, or the fear of
 managing a Linux server? Now you can leave those worries behind!
 
-TuxLite scripts automate configuration of servers for web hosting,
+nonjix scripts automate configuration of servers for web hosting,
 so your websites can be online within minutes! Ideal for those who
 prefer hosting sites on their own server without resorting to expensive
 and bloated control panels.
@@ -21,40 +21,37 @@ The following are installed:-
 -   Postfix mail server (securely configured to be outgoing only)
 -   Varnish cache (optional)
 
-For more detailed explanation on the installation, usage and script features, 
+For more detailed explanation on the installation, usage and script features,
 kindly refer to these links:-
 
-[Installation](http://tuxlite.com/installation/)
+[Installation](http://nonjix.com/installation/)
 
-[Script features](http://tuxlite.com/script-details/)
+[Script features](http://nonjix.com/script-details/)
 
-[Download](http://tuxlite.com/download/)
+[Download](http://nonjix.com/download/)
 
 ### Quick Install (Git)
 
-    # Install git and clone TuxLite
+    # Install git and clone nonjix
     aptitude install git
-    git clone https://github.com/Mins/TuxLite.git
-    cd TuxLite
-    
+    git clone https://github.com/Mins/nonjix.git
+    cd nonjix
+
     # Edit options to enter server IP, MySQL password etc.
     nano options.conf
-    
+
     # Make all scripts executable.
     chmod 700 *.sh
     chmod 700 options.conf
-    
+
     # Install LAMP or LNMP stack.
     ./install.sh
-    
+
     # Add a new Linux user and add domains to the user.
     adduser johndoe
     ./domain.sh add johndoe yourdomain.com
     ./domain.sh add johndoe subdomain.yourdomain.com
-    
-    # Install Adminer or phpMyAdmin
-    ./setup.sh dbgui
-    
+
     # Enable/disable public viewing of Adminer/phpMyAdmin
     ./domain.sh dbgui on
     ./domain.sh dbgui off
@@ -71,9 +68,9 @@ kindly refer to these links:-
 If this is your first time with a Linux server, I suggest spending a day
 reading the "getting started" tutorials in Linode Library.
 
-### Why use TuxLite?
+### Why use nonjix?
 
--   TuxLite LAMP stack configures Apache with mpm\_event and PHP with
+-   nonjix LAMP stack configures Apache with mpm\_event and PHP with
     fastcgi (PHP-FPM). This gives much higher performance and lower memory
     consumption than the regular LAMP tutorials/guides using mod\_php.
 -   Uses official distribution packages. You are not at the mercy of the

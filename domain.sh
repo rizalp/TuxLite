@@ -1,9 +1,9 @@
 #!/bin/bash
 ######################################################################
-# TuxLite virtualhost script                                         #
+# nonjix virtualhost script                                         #
 # Easily add/remove domains or subdomains                            #
-# Configures logrotate, AWStats and PHP5-FPM                         #
-# Enables/disables public viewing of AWStats and Adminer/phpMyAdmin  #
+# Configures logrotate, AWStats                                     #
+# Enables/disables public viewing of AWStats                         #
 ######################################################################
 
 source ./options.conf
@@ -16,30 +16,17 @@ DOMAIN_CHECK_VALIDITY="yes"
 
 #### First initialize some static variables ####
 
-# Specify path to database management tool
-if [ $DB_GUI -eq 1 ]; then
-    DB_GUI_PATH="/usr/local/share/phpmyadmin/"
-else
-    DB_GUI_PATH="/usr/local/share/adminer/"
-fi
-
-
 # Logrotate Postrotate for Nginx
-# From options.conf, nginx = 1, apache = 2
 if [ $WEBSERVER -eq 1 ]; then
     POSTROTATE_CMD='[ ! -f /var/run/nginx.pid ] || kill -USR1 `cat /var/run/nginx.pid`'
-else
-    POSTROTATE_CMD='/etc/init.d/apache2 reload > /dev/null'
 fi
 
-# Variables for AWStats/Adminer|phpMyAdmin functions
-# The path to find for Adminer|phpMyAdmin and Awstats symbolic links
+# Variables for AWStats functions
 PUBLIC_HTML_PATH="/home/*/domains/*/public_html"
 VHOST_PATH="/home/*/domains/*"
 
 
 #### Functions Begin ####
-
 function initialize_variables {
 
     # Initialize variables based on user input. For add/rem functions displayed by the menu
@@ -50,9 +37,6 @@ function initialize_variables {
     if [ $WEBSERVER -eq 1 ]; then
         DOMAIN_CONFIG_PATH="/etc/nginx/sites-available/$DOMAIN"
         DOMAIN_ENABLED_PATH="/etc/nginx/sites-enabled/$DOMAIN"
-    else
-        DOMAIN_CONFIG_PATH="/etc/apache2/sites-available/$DOMAIN"
-        DOMAIN_ENABLED_PATH="/etc/apache2/sites-enabled/$DOMAIN"
     fi
 
     # Awstats command to be placed in logrotate file
@@ -73,29 +57,9 @@ function reload_webserver {
     # From options.conf, nginx = 1, apache = 2
     if [ $WEBSERVER -eq 1 ]; then
         service nginx reload
-    else
-        apache2ctl graceful
     fi
 
 } # End function reload_webserver
-
-
-function php_fpm_add_user {
-
-    # Copy over FPM template for this Linux user if it doesn't exist
-    if [ ! -e /etc/php5/fpm/pool.d/$DOMAIN_OWNER.conf ]; then
-        cp /etc/php5/fpm/pool.d/{www.conf,$DOMAIN_OWNER.conf}
-
-        # Change pool user, group and socket to the domain owner
-        sed -i  's/^\[www\]$/\['${DOMAIN_OWNER}'\]/' /etc/php5/fpm/pool.d/$DOMAIN_OWNER.conf
-        sed -i 's/^listen =.*/listen = \/var\/run\/php5-fpm-'${DOMAIN_OWNER}'.sock/' /etc/php5/fpm/pool.d/$DOMAIN_OWNER.conf
-        sed -i 's/^user = www-data$/user = '${DOMAIN_OWNER}'/' /etc/php5/fpm/pool.d/$DOMAIN_OWNER.conf
-        sed -i 's/^group = www-data$/group = '${DOMAIN_OWNER}'/' /etc/php5/fpm/pool.d/$DOMAIN_OWNER.conf
-    fi
-
-    service php5-fpm restart
-
-} # End function php_fpm_add_user
 
 
 function add_domain {
@@ -136,80 +100,51 @@ EOF
     chmod 711 $DOMAIN_PATH
 
     # Virtualhost entry
-    # From options.conf, nginx = 1, apache = 2
     if [ $WEBSERVER -eq 1 ]; then
         # Nginx webserver. Use Nginx vHost config
         cat > $DOMAIN_CONFIG_PATH <<EOF
 server {
         listen 80;
-        #listen [::]:80 default ipv6only=on;
+        listen 443 ssl;
 
         server_name www.$DOMAIN $DOMAIN;
         root $DOMAIN_PATH/public_html;
-        access_log $DOMAIN_PATH/logs/access.log;
+
+        ## access_log $DOMAIN_PATH/logs/access.log;
         error_log $DOMAIN_PATH/logs/error.log;
 
-        index index.php index.html index.htm;
-        error_page 404 /404.html;
-
-        location / {
-            try_files \$uri \$uri/ /index.php?\$args;
-        }
-
-        # Pass PHP scripts to PHP-FPM
-        location ~ \.php$ {
-            try_files \$uri =403;
-            fastcgi_pass unix:/var/run/php5-fpm-$DOMAIN_OWNER.sock;
-            include fastcgi_params;
-            fastcgi_index index.php;
-            fastcgi_param SCRIPT_FILENAME  \$document_root\$fastcgi_script_name;
-        }
-
-        # Deny access to hidden files
-        location ~ (^|/)\. {
-            deny all;
-        }
-
-        # Prevent logging of favicon and robot request errors
-        location = /favicon.ico { log_not_found off; access_log off; }
-        location = /robots.txt  { log_not_found off; access_log off; }
-}
-
-
-server {
-        listen 443;
-        server_name www.$DOMAIN $DOMAIN;
-        root $DOMAIN_PATH/public_html;
-        access_log $DOMAIN_PATH/logs/access.log;
-        error_log $DOMAIN_PATH/logs/error.log;
-
-        index index.php index.html index.htm;
+        index index.html index.htm;
         error_page 404 /404.html;
 
         ssl on;
         ssl_certificate /etc/ssl/localcerts/webserver.pem;
         ssl_certificate_key /etc/ssl/localcerts/webserver.key;
 
-        ssl_session_timeout 5m;
 
-        ssl_protocols SSLv2 SSLv3 TLSv1;
-        ssl_ciphers HIGH:!aNULL:!MD5;
+        ## the following recomendation is from
+        ## http://techsamurais.com/?p=1384
+
+        ssl_protocols TLSv1 TLSv1.1 TLSv1.2;
+        ssl_ciphers ECDHE-RSA-AES256-SHA384:AES256-SHA256:RC4:HIGH:!MD5:!aNULL:!eNULL:!NULL:!DH:!EDH:!AESGCM;
         ssl_prefer_server_ciphers on;
+        ssl_session_cache shared:SSL:10m;
+        ssl_session_timeout 10m;
 
-        location / {
-            try_files \$uri \$uri/ /index.php?\$args;
+        ## Cache some Static Content
+        location ~* \.(?:ico|css|js|gif|jpe?g|png|ttf|woff)\$ {
+            expires 7d;
+            add_header Pragma public;
+            add_header Cache-Control "public";
         }
 
-        location ~ \.php$ {
-            try_files \$uri =403;
-            fastcgi_pass unix:/var/run/php5-fpm-$DOMAIN_OWNER.sock;
-            include fastcgi_params;
-            fastcgi_index index.php;
-            fastcgi_param SCRIPT_FILENAME  \$document_root\$fastcgi_script_name;
+        location / {
+            try_files \$uri \$uri/ =404;
         }
 
         # Deny access to hidden files
         location ~ (^|/)\. {
+            access_log off;
+            log_not_found off;
             deny all;
         }
 
@@ -217,51 +152,6 @@ server {
         location = /favicon.ico { log_not_found off; access_log off; }
         location = /robots.txt  { log_not_found off; access_log off; }
 }
-EOF
-    else # Use Apache vHost config
-        cat > $DOMAIN_CONFIG_PATH <<EOF
-<VirtualHost *:80>
-
-    ServerName $DOMAIN
-    ServerAlias www.$DOMAIN
-    ServerAdmin admin@$DOMAIN
-    DocumentRoot $DOMAIN_PATH/public_html/
-    ErrorLog $DOMAIN_PATH/logs/error.log
-    CustomLog $DOMAIN_PATH/logs/access.log combined
-
-    FastCGIExternalServer $DOMAIN_PATH/php5-fpm -pass-header Authorization -idle-timeout 120 -socket /var/run/php5-fpm-$DOMAIN_OWNER.sock
-    Alias /php5-fcgi $DOMAIN_PATH
-
-</VirtualHost>
-
-
-<IfModule mod_ssl.c>
-<VirtualHost *:443>
-
-    ServerName $DOMAIN
-    ServerAlias www.$DOMAIN
-    ServerAdmin admin@$DOMAIN
-    DocumentRoot $DOMAIN_PATH/public_html/
-    ErrorLog $DOMAIN_PATH/logs/error.log
-    CustomLog $DOMAIN_PATH/logs/access.log combined
-
-    # With PHP5-FPM, you need to create another PHP5-FPM pool for SSL connections
-    # Adding the same fastcgiexternalserver line here will result in an error
-    Alias /php5-fcgi $DOMAIN_PATH
-
-    SSLEngine on
-    SSLCertificateFile    /etc/ssl/localcerts/webserver.pem
-    SSLCertificateKeyFile /etc/ssl/localcerts/webserver.key
-
-    <FilesMatch "\.(cgi|shtml|phtml|php)$">
-        SSLOptions +StdEnvVars
-    </FilesMatch>
-
-    BrowserMatch "MSIE [2-6]" nokeepalive ssl-unclean-shutdown downgrade-1.0 force-response-1.0
-    BrowserMatch "MSIE [17-9]" ssl-unclean-shutdown
-
-</VirtualHost>
-</IfModule>
 EOF
     fi # End if $WEBSERVER -eq 1
 
@@ -405,41 +295,6 @@ function awstats_off {
 } # End function awstats_off
 
 
-function dbgui_on {
-
-    # Search virtualhost directory to look for "dbgui". In case the user created a "dbgui" folder, we do not want to overwrite it.
-    dbgui_folder=`find $PUBLIC_HTML_PATH -maxdepth 1 -name "dbgui" -print0 | xargs -0 -I path echo path | wc -l`
-
-    # If no "dbgui" folders found, find all available public_html folders and create "dbgui" symbolic link to /usr/local/share/adminer|phpmyadmin
-    if [ $dbgui_folder -eq 0 ]; then
-        find $VHOST_PATH -maxdepth 1 -name "public_html" -type d | xargs -L1 -I path ln -sv $DB_GUI_PATH path/dbgui
-        echo -e "\033[35;1mAdminer or phpMyAdmin enabled.\033[0m"
-    else
-        echo -e "\033[35;1mERROR: Failed to enable Adminer or phpMyAdmin for all domains. \033[0m"
-        echo -e "\033[35;1mERROR: It is already enabled for at least 1 domain. \033[0m"
-        echo -e "\033[35;1mERROR: Turn it off again before re-enabling. \033[0m"
-        echo -e "\033[35;1mERROR: Also ensure that all your public_html(s) do not have a manually created \"dbgui\" folder. \033[0m"
-    fi
-
-} # End function dbgui_on
-
-
-function dbgui_off {
-
-    # Search virtualhost directory to look for "dbgui" symbolic links
-    find $PUBLIC_HTML_PATH -maxdepth 1 -name "dbgui" -type l -print0 | xargs -0 -I path echo path > /tmp/dbgui.txt
-
-    # Remove symbolic links
-    while read LINE; do
-        rm -rfv $LINE
-    done < "/tmp/dbgui.txt"
-    rm -rf /tmp/dbgui.txt
-
-    echo -e "\033[35;1mAdminer or phpMyAdmin disabled. If \"removed\" messages do not appear, it has been previously disabled.\033[0m"
-
-} # End function dbgui_off
-
-
 #### Main program begins ####
 
 # Show Menu
@@ -453,10 +308,6 @@ if [ ! -n "$1" ]; then
     echo -n  "$0"
     echo -ne "\033[36m rem user Domain.tld\033[0m"
     echo     " - Remove everything for Domain.tld including stats and public_html. If necessary, backup domain files before executing!"
-
-    echo -n  "$0"
-    echo -ne "\033[36m dbgui on|off\033[0m"
-    echo     " - Disable or enable public viewing of Adminer or phpMyAdmin."
 
     echo -n  "$0"
     echo -ne "\033[36m stats on|off\033[0m"
@@ -508,7 +359,6 @@ add)
     reload_webserver
     echo -e "\033[35;1mSuccesfully added \"${DOMAIN}\" to user \"${DOMAIN_OWNER}\" \033[0m"
     echo -e "\033[35;1mYou can now upload your site to $DOMAIN_PATH/public_html.\033[0m"
-    echo -e "\033[35;1mAdminer/phpMyAdmin is DISABLED by default. URL = http://$DOMAIN/dbgui.\033[0m"
     echo -e "\033[35;1mAWStats is DISABLED by default. URL = http://$DOMAIN/stats.\033[0m"
     echo -e "\033[35;1mStats update daily. Allow 24H before viewing stats or you will be greeted with an error page. \033[0m"
     echo -e "\033[35;1mIf Varnish cache is enabled, please disable & enable it again to reconfigure this domain. \033[0m"
@@ -542,13 +392,6 @@ rem)
     fi
 
     remove_domain
-    ;;
-dbgui)
-    if [ "$2" = "on" ]; then
-        dbgui_on
-    elif [ "$2" = "off" ]; then
-        dbgui_off
-    fi
     ;;
 stats)
     if [ "$2" = "on" ]; then

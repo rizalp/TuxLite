@@ -9,7 +9,7 @@ service apache2 stop
 service sendmail stop
 service bind9 stop
 service nscd stop
-aptitude -y purge nscd bind9 sendmail apache2 apache2.2-common 
+aptitude -y purge nscd bind9 sendmail apache2 apache2.2-common
 
 echo ""
 echo "Configuring /etc/apt/sources.list."
@@ -30,12 +30,6 @@ echo ""
 echo "Optimizing AWStats, PHP, logrotate & webserver config."
 sleep 5
 ./setup.sh optimize
-
-## Uncomment to secure /tmp folder
-#echo ""
-#echo "Securing /tmp directory."
-## Use tmpdd here if your server has under 256MB memory. Tmpdd will consume a 1GB disk space for /tmp
-#./setup.sh tmpfs
 
 echo ""
 echo "Installation complete!"
