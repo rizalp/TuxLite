@@ -92,6 +92,7 @@ server {
         root $DOMAIN_PATH/public_html;
 
         ## access_log $DOMAIN_PATH/logs/access.log;
+        access_log off;
         error_log $DOMAIN_PATH/logs/error.log;
 
         index index.html index.htm;
