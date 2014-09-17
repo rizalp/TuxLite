@@ -27,7 +27,7 @@ sleep 5
 ./setup.sh install
 
 echo ""
-echo "Optimizing AWStats, PHP, logrotate & webserver config."
+echo "Optimizing Stack For Production"
 sleep 5
 ./setup.sh optimize
 

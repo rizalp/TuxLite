@@ -1,34 +1,26 @@
-### nonjix Readme
+### node-nx Readme
 
-nonjix is a free collection of shell scripts for rapid deployment of
-LAMP and LNMP stacks (Linux, Apache/Nginx, MySQL and PHP) for Debian and
-Ubuntu.
+Ganti IF dengan ""
 
-Have you considered upgrading from shared hosting to a VPS or dedicated
-server but held off by the costly control panel licenses, or the fear of
-managing a Linux server? Now you can leave those worries behind!
+node-nx is a free collection of shell scripts for rapid deployment of Nginx, Nodejs, and PostgreSQL. I fork this scripts from popular [TuxLite](https://github.com/Mins/TuxLite).
 
-nonjix scripts automate configuration of servers for web hosting,
-so your websites can be online within minutes! Ideal for those who
-prefer hosting sites on their own server without resorting to expensive
-and bloated control panels.
+What Changes from upstream :
 
-The following are installed:-
+- Remove Apache, PHP, Varnish, Postfix, Awstat
+- Using PostgreSQL instead of MariaDB / MySQL
+- Install NodeJS though NV
+- Optimize settings for Production / Deployment settings
+- Adminer / PHPMyAdmin. Managing your database should be done on secure host
 
--   Apache2 with mpm\_event or Nginx
--   MySQL or MariaDB
--   PHP-FPM + commonly used PHP modules
--   Postfix mail server (securely configured to be outgoing only)
--   Varnish cache (optional)
 
 For more detailed explanation on the installation, usage and script features,
 kindly refer to these links:-
 
-[Installation](http://nonjix.com/installation/)
+[Installation](#)
 
-[Script features](http://nonjix.com/script-details/)
+[Script features](#)
 
-[Download](http://nonjix.com/download/)
+[Download](#)
 
 ### Quick Install (Git)
 

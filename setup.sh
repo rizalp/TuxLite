@@ -196,10 +196,6 @@ function install_webserver {
 
 function install_extras {
 
-    if [ $AWSTATS_ENABLE = 'yes' ]; then
-        aptitude -y install awstats
-    fi
-
     # Install any other packages specified in options.conf
     aptitude -y install $MISC_PACKAGES
 
@@ -259,16 +255,6 @@ function optimize_stack {
         # Change logrotate for nginx log files to keep 10 days worth of logs
         nginx_file=`find /etc/logrotate.d/ -maxdepth 1 -name "nginx*"`
         sed -i 's/\trotate .*/\trotate 10/' $nginx_file
-    fi
-
-    if [ $AWSTATS_ENABLE = 'yes' ]; then
-        # Configure AWStats
-        temp=`grep -i sitedomain /etc/awstats/awstats.conf.local | wc -l`
-        if [ $temp -lt 1 ]; then
-            echo SiteDomain="$HOSTNAME_FQDN" >> /etc/awstats/awstats.conf.local
-        fi
-        # Disable Awstats from executing every 10 minutes. Put a hash in front of any line.
-        sed -i 's/^[^#]/#&/' /etc/cron.d/awstats
     fi
 
     # Generating self signed SSL certs
@@ -387,7 +373,6 @@ function install_postfix {
 
 } # End function install_postfix
 
-
 function restart_webserver {
 
     if [ $WEBSERVER = 1 ]; then
@@ -418,11 +403,11 @@ if [ ! -n "$1" ]; then
 
     echo -n "$0"
     echo -ne "\033[36m install\033[0m"
-    echo     " - Installs LNMP or LAMP stack. Also installs Postfix MTA."
+    echo     " - Installs nginx, nodejs, postgresql, and extra packages"
 
     echo -n "$0"
     echo -ne "\033[36m optimize\033[0m"
-    echo     " - Optimizes webserver.conf, php.ini, AWStats & logrotate. Also generates self signed SSL certs."
+    echo     " - Optimizes webserver.conf. Also generates self signed SSL certs."
 
     echo ""
     exit

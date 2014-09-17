@@ -25,25 +25,18 @@ fi
 PUBLIC_HTML_PATH="/home/*/domains/*/public_html"
 VHOST_PATH="/home/*/domains/*"
 
-
 #### Functions Begin ####
 function initialize_variables {
 
     # Initialize variables based on user input. For add/rem functions displayed by the menu
     DOMAINS_FOLDER="/home/$DOMAIN_OWNER/domains"
     DOMAIN_PATH="/home/$DOMAIN_OWNER/domains/$DOMAIN"
+    GIT_PATH="/home/$DOMAIN_OWNER/repos/$DOMAIN.git"
 
     # From options.conf, nginx = 1, apache = 2
     if [ $WEBSERVER -eq 1 ]; then
         DOMAIN_CONFIG_PATH="/etc/nginx/sites-available/$DOMAIN"
         DOMAIN_ENABLED_PATH="/etc/nginx/sites-enabled/$DOMAIN"
-    fi
-
-    # Awstats command to be placed in logrotate file
-    if [ $AWSTATS_ENABLE = 'yes' ]; then
-        AWSTATS_CMD="/usr/share/awstats/tools/awstats_buildstaticpages.pl -update -config=$DOMAIN -dir=$DOMAIN_PATH/awstats -awstatsprog=/usr/lib/cgi-bin/awstats.pl > /dev/null"
-    else
-        AWSTATS_CMD=""
     fi
 
     # Name of the logrotate file
@@ -60,7 +53,6 @@ function reload_webserver {
     fi
 
 } # End function reload_webserver
-
 
 function add_domain {
 
@@ -80,17 +72,6 @@ function add_domain {
 </body>
 </html>
 EOF
-
-    # Setup awstats directories
-    if [ $AWSTATS_ENABLE = 'yes' ]; then
-        mkdir -p $DOMAIN_PATH/{awstats,awstats/.data}
-        cd $DOMAIN_PATH/awstats/
-        # Create a symbolic link to awstats generated report named index.html
-        ln -s awstats.$DOMAIN.html index.html
-        # Create link to the icons folder so that reports icons can be loaded
-        ln -s /usr/share/awstats/icon awstats-icon
-        cd - &> /dev/null
-    fi
 
     # Set permissions
     chown $DOMAIN_OWNER:$DOMAIN_OWNER $DOMAINS_FOLDER
@@ -120,7 +101,6 @@ server {
         ssl_certificate /etc/ssl/localcerts/webserver.pem;
         ssl_certificate_key /etc/ssl/localcerts/webserver.key;
 
-
         ## the following recomendation is from
         ## http://techsamurais.com/?p=1384
 
@@ -130,15 +110,23 @@ server {
         ssl_session_cache shared:SSL:10m;
         ssl_session_timeout 10m;
 
-        ## Cache some Static Content
-        location ~* \.(?:ico|css|js|gif|jpe?g|png|ttf|woff)\$ {
-            expires 7d;
-            add_header Pragma public;
-            add_header Cache-Control "public";
-        }
-
         location / {
             try_files \$uri \$uri/ =404;
+        }
+
+        # Enable browser cache for CSS / JS
+        location ~* \.(?:css|js)$ {
+            expires 30d;
+            add_header Pragma "public";
+            add_header Cache-Control "public";
+            add_header Vary "Accept-Encoding";
+        }
+
+        # Enable browser cache for static files
+        location ~* \.(?:ico|jpg|jpeg|gif|png|bmp|webp|tiff|svg|svgz|pdf|mp3|flac|ogg|mid|midi|wav|mp4|webm|mkv|ogv|wmv|eot|otf|woff|ttf|rss|atom|zip|7z|tgz|gz|rar|bz2|tar|exe|doc|docx|xls|xlsx|ppt|pptx|rtf|odt|ods|odp)$ {
+            expires 60d;
+            add_header Pragma "public";
+            add_header Cache-Control "public";
         }
 
         # Deny access to hidden files
@@ -155,19 +143,6 @@ server {
 EOF
     fi # End if $WEBSERVER -eq 1
 
-    if [ $AWSTATS_ENABLE = 'yes' ]; then
-        # Configure Awstats for domain
-        cp /etc/awstats/awstats.conf /etc/awstats/awstats.$DOMAIN.conf
-        sed -i 's/^SiteDomain=.*/SiteDomain="'${DOMAIN}'"/' /etc/awstats/awstats.$DOMAIN.conf
-        sed -i 's/^LogFile=.*/\#Deleted LogFile parameter. Appended at the bottom of this config file instead./' /etc/awstats/awstats.$DOMAIN.conf
-        sed -i 's/^LogFormat=.*/LogFormat=1/' /etc/awstats/awstats.$DOMAIN.conf
-        sed -i 's/^DirData=.*/\#Deleted DirData parameter. Appended at the bottom of this config file instead./' /etc/awstats/awstats.$DOMAIN.conf
-        sed -i 's/^DirIcons=.*/DirIcons=".\/awstats-icon"/' /etc/awstats/awstats.$DOMAIN.conf
-        sed -i '/Include \"\/etc\/awstats\/awstats\.conf\.local\"/ d' /etc/awstats/awstats.$DOMAIN.conf
-        echo "LogFile=\"$DOMAIN_PATH/logs/access.log\"" >> /etc/awstats/awstats.$DOMAIN.conf
-        echo "DirData=\"$DOMAIN_PATH/awstats/.data\"" >> /etc/awstats/awstats.$DOMAIN.conf
-    fi
-
     # Add new logrotate entry for domain
     cat > /etc/logrotate.d/$LOGROTATE_FILE <<EOF
 $DOMAIN_PATH/logs/*.log {
@@ -180,7 +155,6 @@ $DOMAIN_PATH/logs/*.log {
     create 0660 $DOMAIN_OWNER $DOMAIN_OWNER
     sharedscripts
     prerotate
-        $AWSTATS_CMD
     endscript
     postrotate
         $POSTROTATE_CMD
@@ -189,6 +163,25 @@ $DOMAIN_PATH/logs/*.log {
 EOF
     # Enable domain from sites-available to sites-enabled
     ln -s $DOMAIN_CONFIG_PATH $DOMAIN_ENABLED_PATH
+
+    # GIT
+    if [ $GIT_ENABLE = 'yes' ]; then
+        mkdir -p $GIT_PATH
+        cd $GIT_PATH
+        git init --bare
+        cat > hooks/post-receive <<EOF
+#!/bin/sh
+    GIT_WORK_TREE=$DOMAIN_PATH git checkout -f
+EOF
+        chmod +x hooks/post-receive
+        cd - &> /dev/null
+
+        # Set permissions
+        chown -R $DOMAIN_OWNER:$DOMAIN_OWNER $GIT_PATH
+        echo -e "\033[35;1mSuccesfully Created git repository \033[0m"
+        echo -e "\033[35;1mgit remote add web ssh://$DOMAIN_OWNER@$HOSTNAME_FQDN:$SSHD_PORT/$GIT_PATH \033[0m"
+    fi
+
 
 } # End function add_domain
 
@@ -206,12 +199,6 @@ function remove_domain {
     reload_webserver
 
     # Then delete all files and config files
-    if [ $AWSTATS_ENABLE = 'yes' ]; then
-        echo -e "* Removing awstats config: \033[1m/etc/awstats/awstats.$DOMAIN.conf\033[0m"
-        sleep 1
-        rm -rf /etc/awstats/awstats.$DOMAIN.conf
-    fi
-
     echo -e "* Removing domain files: \033[1m$DOMAIN_PATH\033[0m"
     sleep 1
     rm -rf $DOMAIN_PATH
@@ -223,6 +210,10 @@ function remove_domain {
     echo -e "* Removing logrotate file: \033[1m/etc/logrotate.d/$LOGROTATE_FILE\033[0m"
     sleep 1
     rm -rf /etc/logrotate.d/$LOGROTATE_FILE
+
+    echo -e "* Removing git repository: \033[1m$GIT_PATH\033[0m"
+    sleep 1
+    rm -rf $GIT_PATH
 
 } # End function remove_domain
 
@@ -355,7 +346,6 @@ add)
     fi
 
     add_domain
-    php_fpm_add_user
     reload_webserver
     echo -e "\033[35;1mSuccesfully added \"${DOMAIN}\" to user \"${DOMAIN_OWNER}\" \033[0m"
     echo -e "\033[35;1mYou can now upload your site to $DOMAIN_PATH/public_html.\033[0m"
