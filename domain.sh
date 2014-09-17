@@ -1,9 +1,6 @@
 #!/bin/bash
 ######################################################################
-# nonjix virtualhost script                                         #
 # Easily add/remove domains or subdomains                            #
-# Configures logrotate, AWStats                                     #
-# Enables/disables public viewing of AWStats                         #
 ######################################################################
 
 source ./options.conf
@@ -20,10 +17,6 @@ DOMAIN_CHECK_VALIDITY="yes"
 if [ $WEBSERVER -eq 1 ]; then
     POSTROTATE_CMD='[ ! -f /var/run/nginx.pid ] || kill -USR1 `cat /var/run/nginx.pid`'
 fi
-
-# Variables for AWStats functions
-PUBLIC_HTML_PATH="/home/*/domains/*/public_html"
-VHOST_PATH="/home/*/domains/*"
 
 #### Functions Begin ####
 function initialize_variables {
@@ -93,7 +86,7 @@ server {
 
         ## access_log $DOMAIN_PATH/logs/access.log;
         access_log off;
-        error_log $DOMAIN_PATH/logs/error.log;
+        error_log $DOMAIN_PATH/logs/error.log crit;
 
         index index.html index.htm;
         error_page 404 /404.html;
@@ -251,59 +244,18 @@ function check_domain_valid {
 
 } # End function check_domain_valid
 
-
-function awstats_on {
-
-    # Search virtualhost directory to look for "stats". In case the user created a stats folder, we do not want to overwrite it.
-    stats_folder=`find $PUBLIC_HTML_PATH -maxdepth 1 -name "stats" -print0 | xargs -0 -I path echo path | wc -l`
-
-    # If no stats folder found, find all available public_html folders and create symbolic link to the awstats folder
-    if [ $stats_folder -eq 0 ]; then
-        find $VHOST_PATH -maxdepth 1 -name "public_html" -type d | xargs -L1 -I path ln -sv ../awstats path/stats
-        echo -e "\033[35;1mAwstats enabled.\033[0m"
-    else
-        echo -e "\033[35;1mERROR: Failed to enable AWStats for all domains. \033[0m"
-        echo -e "\033[35;1mERROR: AWStats is already enabled for at least 1 domain. \033[0m"
-        echo -e "\033[35;1mERROR: Turn AWStats off again before re-enabling. \033[0m"
-        echo -e "\033[35;1mERROR: Also ensure that all your public_html(s) do not have a manually created \"stats\" folder. \033[0m"
-    fi
-
-} # End function awstats_on
-
-
-function awstats_off {
-
-    # Search virtualhost directory to look for "stats" symbolic links
-    find $PUBLIC_HTML_PATH -maxdepth 1 -name "stats" -type l -print0 | xargs -0 -I path echo path > /tmp/awstats.txt
-
-    # Remove symbolic links
-    while read LINE; do
-        rm -rfv $LINE
-    done < "/tmp/awstats.txt"
-    rm -rf /tmp/awstats.txt
-
-    echo -e "\033[35;1mAwstats disabled. If you do not see any \"removed\" messages, it means it has already been disabled.\033[0m"
-
-} # End function awstats_off
-
-
 #### Main program begins ####
-
 # Show Menu
 if [ ! -n "$1" ]; then
     echo ""
     echo -e "\033[35;1mSelect from the options below to use this script:- \033[0m"
     echo -n  "$0"
     echo -ne "\033[36m add user Domain.tld\033[0m"
-    echo     " - Add specified domain to \"user's\" home directory. AWStats(optional) and log rotation will be configured."
+    echo     " - Add specified domain to \"user's\" home directory, and log rotation will be configured."
 
     echo -n  "$0"
     echo -ne "\033[36m rem user Domain.tld\033[0m"
     echo     " - Remove everything for Domain.tld including stats and public_html. If necessary, backup domain files before executing!"
-
-    echo -n  "$0"
-    echo -ne "\033[36m stats on|off\033[0m"
-    echo     " - Disable or enable public viewing of AWStats."
 
     echo ""
     exit 0
@@ -350,9 +302,6 @@ add)
     reload_webserver
     echo -e "\033[35;1mSuccesfully added \"${DOMAIN}\" to user \"${DOMAIN_OWNER}\" \033[0m"
     echo -e "\033[35;1mYou can now upload your site to $DOMAIN_PATH/public_html.\033[0m"
-    echo -e "\033[35;1mAWStats is DISABLED by default. URL = http://$DOMAIN/stats.\033[0m"
-    echo -e "\033[35;1mStats update daily. Allow 24H before viewing stats or you will be greeted with an error page. \033[0m"
-    echo -e "\033[35;1mIf Varnish cache is enabled, please disable & enable it again to reconfigure this domain. \033[0m"
     ;;
 rem)
     # Add domain for user
@@ -383,12 +332,5 @@ rem)
     fi
 
     remove_domain
-    ;;
-stats)
-    if [ "$2" = "on" ]; then
-        awstats_on
-    elif [ "$2" = "off" ]; then
-        awstats_off
-    fi
     ;;
 esac

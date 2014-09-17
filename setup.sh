@@ -1,8 +1,3 @@
-###############################################################################################
-# nonjix - Complete Nodejs + Nginx setup script for Debian/Ubuntu                             #
-# Email your questions to rizalp@gmail.com                                                    #
-###############################################################################################
-
 source ./options.conf
 
 # Detect distribution. Debian or Ubuntu
@@ -249,7 +244,8 @@ function optimize_stack {
     if [ $WEBSERVER = 1 ]; then
         cat ./config/nginx.conf > /etc/nginx/nginx.conf
 
-        # Change nginx user from  "www-data" to "nginx".
+        # Change nginx user from  "www-data" to "nginx". Not really necessary
+        # because "www-data" user is created when installing PHP5-FPM
         if  [ $USE_NGINX_ORG_REPO = "yes" ]; then
             sed -i 's/^user\s*www-data/user nginx/' /etc/nginx/nginx.conf
         fi
